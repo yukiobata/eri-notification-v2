@@ -1,0 +1,38 @@
+name: Chiba Eri News Check
+
+on:
+  schedule:
+    # UTC基準。 0,3,6,9,12,15,18,21時(UTC) = 日本時間 9,12,15,18,21,0,3,6時 に実行(3時間おき)
+    - cron: "0 */3 * * *"
+  workflow_dispatch: {}  # 手動実行用ボタンも有効化
+
+permissions:
+  contents: write  # seen.json をコミットし直すために必要
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run news check
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python check_news.py
+
+      - name: Commit updated seen.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add seen.json
+          git diff --cached --quiet || git commit -m "chore: update seen.json [skip ci]"
+          git push
