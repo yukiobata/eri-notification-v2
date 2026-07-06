@@ -13,7 +13,6 @@ import os
 import json
 import hashlib
 import sys
-from urllib.parse import quote
 import feedparser
 import requests
 
@@ -27,11 +26,6 @@ KEYWORD = "千葉恵里"
 # 1) Google Newsのキーワード検索RSS(ニュース記事全般をカバー)
 # 2) 個別サイトの公式RSS(あれば追加。無い場合は削除してOK)
 SOURCES = [
-    {
-        "name": "Google News",
-        "url": f"https://news.google.com/rss/search?q={quote(KEYWORD)}&hl=ja&gl=JP&ceid=JP:ja",
-        "filter_keyword": None,  # 検索クエリ自体で絞られているのでフィルター不要
-    },
     {
         "name": "AKB48 Official Blog",
         "url": "https://rssblog.ameba.jp/akihabara48/rss20.xml",
