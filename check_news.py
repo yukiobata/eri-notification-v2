@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-千葉恵里さんに関する新着情報を取得し、まだ通知していないものだけ
+指定メンバーに関する新着情報を取得し、まだ通知していないものだけ
 Discord Webhook 経由で自分のサーバー/チャンネルに通知するスクリプト。
 
-- 情報源は SOURCES に列挙した RSS フィード（Google Newsのキーワード検索 + 個別サイトのRSS）
+- 情報源は SOURCES に列挙した RSS フィード(AKB48公式ブログなど)
+- KEYWORDS に含めたメンバー名のいずれかが記事タイトル/本文抜粋に含まれていれば通知対象
 - 通知済みの記事は seen.json に記録し、次回以降は重複通知しない
 - GitHub Actions から定期実行され、seen.json の更新は自動コミットされる想定
 """
@@ -20,24 +21,23 @@ import requests
 # 設定
 # ============================================================
 
-KEYWORD = "千葉恵里"
+# 情報を追いたいメンバー名(何人でも追加OK)
+KEYWORDS = ["千葉恵里", "伊藤百花", "八木愛月"]
 
 # 情報源のRSSフィード一覧。
-# 1) Google Newsのキーワード検索RSS(ニュース記事全般をカバー)
-# 2) 個別サイトの公式RSS(あれば追加。無い場合は削除してOK)
 SOURCES = [
     {
         "name": "AKB48 Official Blog",
         "url": "https://rssblog.ameba.jp/akihabara48/rss20.xml",
         # このブログはAKB48メンバー全員の共同ブログなので、
-        # タイトル or 本文抜粋に「千葉恵里」を含む記事だけを通知対象にする
-        "filter_keyword": KEYWORD,
+        # タイトル or 本文抜粋に KEYWORDS のいずれかを含む記事だけを通知対象にする
+        "filter_keywords": KEYWORDS,
     },
     # 他に見てほしい公式ブログ・サイトのRSSがあればここに追加してください
     # {
     #     "name": "サイト名",
     #     "url": "https://example.com/feed",
-    #     "filter_keyword": None,  # そのサイト全体が対象ならNone、キーワード絞込が必要ならKEYWORDなど
+    #     "filter_keywords": None,  # そのサイト全体が対象ならNone、キーワード絞込が必要ならKEYWORDSなど
     # },
 ]
 
@@ -82,11 +82,16 @@ def fetch_new_entries(seen):
             continue
 
         for entry in feed.entries:
-            keyword = src.get("filter_keyword")
-            if keyword:
-                haystack = (entry.get("title", "") + " " + entry.get("summary", ""))
-                if keyword not in haystack:
-                    continue  # このソースの対象キーワードを含まない記事はスキップ
+            keywords = src.get("filter_keywords")
+            title = entry.get("title", "")
+            summary = entry.get("summary", "")
+            haystack = title + " " + summary
+
+            matched_members = []
+            if keywords:
+                matched_members = [kw for kw in keywords if kw in haystack]
+                if not matched_members:
+                    continue  # 対象メンバーの名前を含まない記事はスキップ
 
             eid = entry_id(entry, src["name"])
             if eid in seen:
@@ -98,6 +103,7 @@ def fetch_new_entries(seen):
                     "title": entry.get("title", "(タイトルなし)"),
                     "link": entry.get("link", ""),
                     "published": entry.get("published", ""),
+                    "matched_members": matched_members,
                 }
             )
     return new_items
@@ -119,8 +125,10 @@ def send_discord_message(text):
 def format_message(item):
     lines = [
         f"**【{item['source']}】新着情報**",
-        item["title"],
     ]
+    if item.get("matched_members"):
+        lines.append(f"対象: {'・'.join(item['matched_members'])}")
+    lines.append(item["title"])
     if item["published"]:
         lines.append(f"_{item['published']}_")
     if item["link"]:
